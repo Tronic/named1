@@ -1,17 +1,17 @@
+import itertools
+import json
+import math
+import random
+import ssl
+import time
+from urllib.parse import quote
+
+import h2.connection
 import trio
 import trio.socket as socket
-import ssl
-import json
-import h2.connection
 from h2.events import ResponseReceived, DataReceived, StreamEnded, StreamReset, ConnectionTerminated
-from urllib.parse import quote
-import time
-import random
-from math import inf
-from dnserror import WontResolve
-from itertools import cycle
 
-class ConnectionDead(RuntimeError): pass
+from named1.dnserror import WontResolve
 
 class NameConnection:
     def __init__(self, name, ip, host, path):
@@ -129,7 +129,7 @@ class NameConnection:
         data["NameClient"] = self.name
         if data:
             self.successes += 1
-            self.connection.deadline += 10 if self.streams else inf
+            self.connection.deadline += 10 if self.streams else math.inf
         return data
 
 class NameClient:
@@ -139,7 +139,7 @@ class NameClient:
         self.connections = set()
 
     async def execute(self):
-        ip = cycle(self.servers['ipv6'] + self.servers['ipv4'])
+        ip = itertools.cycle(self.servers['ipv6'] + self.servers['ipv4'])
         async with trio.open_nursery() as nursery:
             while True:
                 while len(self.connections) < 2:

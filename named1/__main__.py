@@ -1,11 +1,8 @@
-import warnings
-warnings.simplefilter("ignore", DeprecationWarning)  # Silence H2 warnings about importing ABCs from collections
-
 import trio
-from nameclient import NameClient
-from serve53 import serve53
-from rediscache import Cacher
-from dnserror import WontResolve
+from named1.dnserror import WontResolve
+from named1.nameclient import NameClient
+from named1.rediscache import Cacher
+from named1.serve53 import serve53
 
 providers = {
     "cloudflare": {

@@ -1,11 +1,8 @@
-import trio
-from trio.socket import socket, AF_INET, SOCK_DGRAM
-from dns import message, rrset, flags, rcode
-from nameutil import dnscodes
-import io
 import json
 
-codes = dnscodes()
+import trio
+from dns import message, rrset, flags, rcode
+from trio.socket import socket, AF_INET, SOCK_DGRAM
 
 async def _process(sock, resolve, data, addr):
     try:
@@ -19,7 +16,6 @@ async def _process(sock, resolve, data, addr):
         res = await resolve(name=rr.name, type=rr.rdtype, do=do)
         responses = [res]
         msg = message.make_response(msg)
-        #if len(responses) < len(msg.question): msg.rcode = rcode.SERVFAIL
         msg.question, msg.answer = [], []
         for r in responses:
             msg.flags |= flags.from_text(" ".join(k for k, v in r.items() if len(k) == 2 and v is True))
