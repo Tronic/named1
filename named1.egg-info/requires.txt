@@ -1,0 +1,4 @@
+trio>=0.12
+trio-redis
+h2
+dnspython

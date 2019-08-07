@@ -1,0 +1,14 @@
+Metadata-Version: 2.1
+Name: named1
+Version: 0.0.2
+Summary: DNS server with DNS-over-HTTPS and Redis caching
+Home-page: https://github.com/Tronic/named1
+Author: L. Kärkkäinen
+Author-email: tronic@noreply.users.github.com
+License: UNKNOWN
+Description: UNKNOWN
+Platform: UNKNOWN
+Classifier: Programming Language :: Python :: 3
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: OS Independent
+Description-Content-Type: text/markdown
