@@ -1,0 +1,1 @@
+class WontResolve(LookupError): pass
