@@ -40,7 +40,9 @@ async def main():
         async with sender, receiver:
             for nclient in nclients:
                 nursery.start_soon(resolve_task, sender.clone(), nclient.resolve(**dnsquery))
-            fastest = await receiver.receive()
+            # Request timeout: slightly under a second so it finishes before downstream re-send
+            with trio.fail_after(0.95):
+                fastest = await receiver.receive()
             if cacher:
                 await sender.send(fastest)  # Put the fastest back for cacher
                 nursery.start_soon(cacher_task, receiver.clone(), cacher)
@@ -54,7 +56,7 @@ async def main():
                     await nursery.start(cacher_.execute)
                     cacher = cacher_
                     print("[RedisCache] DNS caching enabled")
-            except OSError: pass
+            except OSError as e: print(e)
             if not cacher: print(f"[RedisCache] Cannot connect, caching disabled")
             await nursery.start(serve53, ("0.0.0.0", 53), resolve)
             await nursery.start(serve53, ("::", 53), resolve)

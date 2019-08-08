@@ -9,7 +9,7 @@ async def _process(sock, resolve, data, addr):
     try:
         msg = message.from_wire(data)
     except:
-        print(f'Serve53 invalid message from {addr}')
+        print(f'[Serve53] invalid message from {addr}')
         return
     try:
         do = "1" if msg.flags & flags.DO else "0"
@@ -25,9 +25,8 @@ async def _process(sock, resolve, data, addr):
                     data = [a['data']] if 'data' in a else []
                     m.append(rrset.from_text(a['name'], a.get('TTL'), "IN", a['type'], *data))
                     if sys.flags.dev_mode:
-                        print(f"[{res['NameClient']}] {str(m[-1])[:73]:73s}", end="\r", flush=True)
-    except RuntimeError as e:
-        print(f'Serve53 error {e!r}')
+                        print(f"\033[32m[{res['NameClient']}] {str(m[-1])[:73]:73s}", end="\r\033[0m", flush=True)
+    except trio.TooSlowError: # Don't die on timeout but report back a failure
         msg.flags = flags.QR
         msg.set_rcode(rcode.SERVFAIL)
     await sock.sendto(msg.to_wire(), addr)

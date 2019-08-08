@@ -144,12 +144,13 @@ class NameClient:
         ip = itertools.cycle(self.servers['ipv6'] + self.servers['ipv4'])
         async def run_connection(task_status):
             nonlocal ip, cancel_scope
-            await trio.sleep(0.1 * random.random())  # Avoid connecting everything at the same moment
             connection = NameConnection(self.name, next(ip), self.servers['host'], self.servers['path'])
             try:
                 await connection.execute(self.connections, task_status=task_status)
             except (OSError, trio.BrokenResourceError): pass
-            if connection.successes == 0: await trio.sleep(1)
+            if connection.successes == 0:
+                # Scatter reconnection times after disconnection
+                await trio.sleep(1 + random.random())
             cancel_scope.cancel()  # Trigger reconnection
 
         # Try to keep two connections alive at all times

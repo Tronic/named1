@@ -41,14 +41,17 @@ class Cacher:
         async with self.lock:
             cached = await self.redis.get(key)
         if not cached: raise WontResolve(f"[RedisCache] {name} not found")
-        cached = json.loads(cached)
-        answer = [
-            dict(name=name, type=t, TTL = expire - now, data=data)
-            for t, expire, data in cached['Answer'] if expire > now and (type == 255 or type == t or t == 5)
-        ]
-        if recurse_cnames:
-            for cname in {a['data'] for a in answer if a['type'] == 5}:
-                answer += await self.resolve_answer(cname, type, recurse_cnames=False)
+        try:
+            cached = json.loads(cached)
+            answer = [
+                dict(name=name, type=t, TTL = expire - now, data=data)
+                for t, expire, data in cached['Answer'] if expire > now and (type == 255 or type == t or t == 5)
+            ]
+            if recurse_cnames:
+                for cname in {a['data'] for a in answer if a['type'] == 5}:
+                    answer += await self.resolve_answer(cname, type, recurse_cnames=False)
+        except Exception as e:
+            raise WontResolve(f"[RedisCache] Unexpected error responding from cached={cached!r}", exceptions=[e])
         return answer
 
     async def resolve(self, name, type, **kwargs):
