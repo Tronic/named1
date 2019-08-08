@@ -65,5 +65,5 @@ do any asynchronous programming on Python, do yourself a favour and stay far
 away from the standard library ````asyncio```` module -- I found it to be not
 only badly designed but also full of bugs.
 
-Hyper ````h2```` is used for HTTP/2 and ````dnspython``` for wire-format DNS
+Hyper ````h2```` is used for HTTP/2 and ````dnspython```` for wire-format DNS
 messages.
