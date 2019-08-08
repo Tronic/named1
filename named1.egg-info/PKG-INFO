@@ -1,6 +1,6 @@
 Metadata-Version: 2.1
 Name: named1
-Version: 0.0.6
+Version: 0.0.7
 Summary: DNS server with DNS-over-HTTPS and Redis caching
 Home-page: https://github.com/Tronic/named1
 Author: L. Kärkkäinen
@@ -62,10 +62,10 @@ Description: # Named1 DNS server
         ## Development
         
         For more detailed output (incl. any successful lookups and which provider was
-        fastest), use Python developer mode:
+        fastest), use Python debug mode:
         
         ````
-        python3 -X dev -m named1
+        python3 -d -m named1
         ````
         
         This program is based on Python ````trio```` async I/O framework. If you plan to
