@@ -54,8 +54,8 @@ class NameConnection:
                 connections.add(self)
                 try:
                     async with trio.open_nursery() as nursery:
-                        nursery.start_soon(self.send_task)
                         task_status.started()
+                        nursery.start_soon(self.send_task)
                         await self.recv_task()
                 finally:
                     with trio.move_on_after(1) as cleanup:
@@ -64,8 +64,8 @@ class NameConnection:
                         self.exited.set()
                         self.duration = time.monotonic() - t
                         if self.reason is None:
-                            self.reason = "canceled by us" if self.connection.cancel_called else "disconnected"
-                        requests = f"requests OK {self.successes}/{self.attempted}" if self.attempted else "no requests done"
+                            self.reason = "we canceled" if self.connection.cancel_called else "disconnected"
+                        requests = f"answered {self.successes}/{self.attempted}" if self.attempted else "no requests done"
                         print(f"[{self.name}] {self.ip} {self.reason} after {self.duration:.2f} s, {requests}")
                         for stream in list(self.streams.values()): await stream.aclose()
 
@@ -92,7 +92,7 @@ class NameConnection:
                     raise RuntimeError("Peer ended the connection")
 
     async def resolve(self, **req):
-        if self.exited.is_set(): raise RuntimeError("H2Proto no longer executing")
+        if self.exited.is_set(): raise RuntimeError("NameConnection no longer executing")
         while len(self.streams) > 3:
             await trio.sleep(0.01)
         self.connection.deadline = min(self.connection.deadline, trio.move_on_after(2).deadline)
@@ -129,7 +129,9 @@ class NameConnection:
         data["NameClient"] = self.name
         if data:
             self.successes += 1
-            self.connection.deadline += 10 if self.streams else math.inf
+            # Extend deadline; Cloudflare and Google die after about 200 so don't bother after 100.
+            if self.attempted < 100:
+                self.connection.deadline += 10 if self.streams else math.inf
         return data
 
 class NameClient:
@@ -140,32 +142,49 @@ class NameClient:
 
     async def execute(self):
         ip = itertools.cycle(self.servers['ipv6'] + self.servers['ipv4'])
+        async def run_connection(task_status):
+            nonlocal ip, cancel_scope
+            await trio.sleep(0.1 * random.random())  # Avoid connecting everything at the same moment
+            connection = NameConnection(self.name, next(ip), self.servers['host'], self.servers['path'])
+            try:
+                await connection.execute(self.connections, task_status=task_status)
+            except (OSError, trio.BrokenResourceError): pass
+            if connection.successes == 0: await trio.sleep(1)
+            cancel_scope.cancel()  # Trigger reconnection
+
+        # Try to keep two connections alive at all times
         async with trio.open_nursery() as nursery:
             while True:
-                while len(self.connections) < 2:
-                    await trio.sleep(0.1 * random.random())  # Avoid connecting everything at the same moment
-                    connection = NameConnection(self.name, next(ip), self.servers['host'], self.servers['path'])
-                    try:
-                        await nursery.start(connection.execute, self.connections)
-                    except OSError:  # TCP connect() failed (most likely network down)
-                        await trio.sleep(1)
-                    except trio.BrokenResourceError:  # Disconnected
-                        pass
-                await trio.sleep(3) # Limit load & allow other async code to run
+                with trio.CancelScope() as cancel_scope:
+                    while len(self.connections) < 2:
+                        # Returns once NameConnection has added itself to self.connections, or connection fails
+                        await nursery.start(run_connection)
+                    await trio.sleep_forever()
 
     async def resolve(self, name, type="A", **kwargs):
+        """Try resolving using any available connections. New requests are made
+        at short intervals if other servers are available, without interrupting
+        prior requests. The first reply is returned and then all remaining
+        requests are terminated. Total timeout 0.9 seconds."""
         if type in (255, "*", "ANY") and self.name == "cloudflare":
-            raise WontResolve("Cloudflare won't answer */ANY requests")
-        for _ in range(3):
-            connections = list(self.connections)
-            if not connections:
-                await trio.sleep(1)
-                continue
-            random.shuffle(connections)
-            for connection in connections:
-                with trio.move_on_after(0.3):
-                    return await connection.resolve(name=name, type=type, **kwargs)
-        raise RuntimeError("Request timed out")
+            raise WontResolve(f"[{self.name}] {name} Cloudflare won't answer */ANY requests")
+        tried_connections = set()
+        sender, receiver = trio.open_memory_channel(1000)
+        request_exceptions = []
+        async def resolve_task(resolver):
+            try: sender.send_nowait(await resolver)
+            except RuntimeError as e: request_exceptions.append(e)
+        async with trio.open_nursery() as nursery, receiver:
+            for delay in (0.1, 0.2, 0.3, 0.3):  # Retry until deadline
+                connections = self.connections - tried_connections
+                if connections:
+                    connection = random.choice(list(connections))
+                    tried_connections.add(connection)
+                    nursery.start_soon(resolve_task, connection.resolve(name=name, type=type, **kwargs))
+                with trio.move_on_after(delay):
+                    return await receiver.receive()
+        reason = f"requests unanswered {len(tried_connections)}" if tried_connections else "waiting for connection"
+        raise WontResolve(f"[{self.name}] {name} timeout {reason}", request_exceptions)
 
     def resolve_reverse(self, ip):
         from ipaddress import ip_address

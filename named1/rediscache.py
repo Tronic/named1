@@ -7,10 +7,12 @@ from trio_redis import Redis
 from named1.dnserror import WontResolve
 
 class Cacher:
-    async def execute(self):
-        self.lock = trio.StrictFIFOLock()
+    async def execute(self, task_status=trio.TASK_STATUS_IGNORED):
         async with Redis() as self.redis:
+            self.lock = trio.Lock()
+            task_status.started()
             await trio.sleep_forever()
+
 
     async def cache(self, qr):
         name = qr['Question'][0]['name']
@@ -38,7 +40,7 @@ class Cacher:
         now = int(datetime.now().timestamp())
         async with self.lock:
             cached = await self.redis.get(key)
-        if not cached: raise WontResolve("Name not found in cache")
+        if not cached: raise WontResolve(f"[RedisCache] {name} not found")
         cached = json.loads(cached)
         answer = [
             dict(name=name, type=t, TTL = expire - now, data=data)

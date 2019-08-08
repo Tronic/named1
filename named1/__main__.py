@@ -1,23 +1,12 @@
+import sys
+
 import trio
+
+from named1 import providers
 from named1.dnserror import WontResolve
 from named1.nameclient import NameClient
 from named1.rediscache import Cacher
 from named1.serve53 import serve53
-
-providers = {
-    "cloudflare": {
-        'host': 'cloudflare-dns.com',
-        'path': '/dns-query',
-        'ipv4': ('1.0.0.1', '1.1.1.1'),
-        'ipv6': ('2606:4700:4700::1111', '2606:4700:4700::1001'),
-    },
-    "google": {
-        'host': 'dns.google',
-        'path': '/resolve',
-        'ipv4': ["8.8.4.4", "8.8.8.8"],
-        'ipv6': ['2001:4860:4860::8844', '2001:4860:4860::8888'],
-    },
-}
 
 async def cacher_task(receiver, cacher):
     with trio.move_on_after(10):
@@ -34,32 +23,44 @@ async def resolve_task(sender, query):
             with trio.move_on_after(5):
                 sender.send_nowait(await query)
         except trio.BrokenResourceError: pass  # We are late, no-one's listening
-        except WontResolve: pass  # Quiet decline from resolver
+        except WontResolve as e:
+            if sys.flags.dev_mode: print(e)
         except RuntimeError as e:
             print(f"{query.__qualname__} {e!r}")
 
 async def main():
     nclients = [NameClient(name, servers) for name, servers in providers.items()]
-    cacher = Cacher()
     async def resolve(**dnsquery):
-        nonlocal nursery
-        with trio.move_on_after(0.01):
-            try: return await cacher.resolve(**dnsquery)
-            except WontResolve: pass
+        nonlocal nursery, cacher
+        if cacher:
+            with trio.move_on_after(0.01):
+                try: return await cacher.resolve(**dnsquery)
+                except WontResolve: pass
         sender, receiver = trio.open_memory_channel(1000)
         async with sender, receiver:
             for nclient in nclients:
                 nursery.start_soon(resolve_task, sender.clone(), nclient.resolve(**dnsquery))
             fastest = await receiver.receive()
-            # Put fastest back, to cache everything (later)
-            await sender.send(fastest)
-            nursery.start_soon(cacher_task, receiver.clone(), cacher)
+            if cacher:
+                await sender.send(fastest)  # Put the fastest back for cacher
+                nursery.start_soon(cacher_task, receiver.clone(), cacher)
             return fastest
     try:
         async with trio.open_nursery() as nursery:
-            nursery.start_soon(cacher.execute)
-            nursery.start_soon(serve53, ("0.0.0.0", 53), resolve)
+            try:
+                cacher = None
+                with trio.move_on_after(0.1):
+                    cacher_ = Cacher()
+                    await nursery.start(cacher_.execute)
+                    cacher = cacher_
+                    print("[RedisCache] DNS caching enabled")
+            except OSError: pass
+            if not cacher: print(f"[RedisCache] Cannot connect, caching disabled")
+            await nursery.start(serve53, ("0.0.0.0", 53), resolve)
+            await nursery.start(serve53, ("::", 53), resolve)
             for nclient in nclients: nursery.start_soon(nclient.execute)
+    except KeyboardInterrupt:
+        if sys.flags.dev_mode: raise  # Traceback plz!
     finally:
         print("Exiting")
 
