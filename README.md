@@ -12,7 +12,7 @@ responds fastest gets reported back. The fastest answer as well as any other
 answers that arrive get cached (if Redis database is installed) so that the
 next time upstream DNS don't even need to be queried.
 
-"Happy eyes" style fallback is used within each provider, so that if one of the
+"Happy eyeballs" style fallback is used within each provider, so that if one of the
 servers doesn't respond quickly enough, the other one gets queried as well.
 Again, the fastest response wins.
 
