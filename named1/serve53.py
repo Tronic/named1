@@ -1,8 +1,9 @@
 import json
+import sys
 
 import trio
 from dns import message, rrset, flags, rcode
-from trio.socket import socket, AF_INET, SOCK_DGRAM
+from trio.socket import socket, AF_INET, AF_INET6, SO_REUSEPORT, SOCK_DGRAM, SOL_SOCKET
 
 async def _process(sock, resolve, data, addr):
     try:
@@ -23,7 +24,8 @@ async def _process(sock, resolve, data, addr):
                 for a in r.get(n, []):
                     data = [a['data']] if 'data' in a else []
                     m.append(rrset.from_text(a['name'], a.get('TTL'), "IN", a['type'], *data))
-                    #print(f"[{res['NameClient']}] {str(m[-1])[:73]:73s}", end="\r", flush=True)
+                    if sys.flags.dev_mode:
+                        print(f"[{res['NameClient']}] {str(m[-1])[:73]:73s}", end="\r", flush=True)
     except RuntimeError as e:
         print(f'Serve53 error {e!r}')
         msg.flags = flags.QR
@@ -31,9 +33,20 @@ async def _process(sock, resolve, data, addr):
     await sock.sendto(msg.to_wire(), addr)
 
 
-async def serve53(addr, resolve):
-    with socket(AF_INET, SOCK_DGRAM) as sock:
-        await sock.bind(addr)
+async def serve53(addr, resolve, task_status=trio.TASK_STATUS_IGNORED):
+    with socket(AF_INET6 if ":" in addr[0] else AF_INET, SOCK_DGRAM) as sock:
+        try:
+            sock.setsockopt(SOL_SOCKET, SO_REUSEPORT, 1)
+            await sock.bind(addr)
+            print(f"[Serve53] listening on {addr}")
+        except OSError as e:
+            if e.errno == 13: reason = "permission denied (run with sudo?)"
+            elif e.errno == 48: reason = "already in use (is another DNS server running?)"
+            else: reason = str(e)
+            print(f"[Serve53] {addr} {reason}")
+            return
+        finally:
+            task_status.started()
         async with trio.open_nursery() as resolvers:
             while True:
                 data, addr = await sock.recvfrom(8192)
