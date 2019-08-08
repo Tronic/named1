@@ -1,9 +1,10 @@
 import json
-import sys
 
 import trio
 from dns import message, rrset, flags, rcode
 from trio.socket import socket, AF_INET, AF_INET6, SO_REUSEPORT, SOCK_DGRAM, SOL_SOCKET
+
+from named1 import debug
 
 async def _process(sock, resolve, data, addr):
     try:
@@ -24,7 +25,7 @@ async def _process(sock, resolve, data, addr):
                 for a in r.get(n, []):
                     data = [a['data']] if 'data' in a else []
                     m.append(rrset.from_text(a['name'], a.get('TTL'), "IN", a['type'], *data))
-                    if sys.flags.dev_mode:
+                    if debug:
                         print(f"\033[32m[{res['NameClient']}] {str(m[-1])[:73]:73s}", end="\r\033[0m", flush=True)
     except trio.TooSlowError: # Don't die on timeout but report back a failure
         msg.flags = flags.QR

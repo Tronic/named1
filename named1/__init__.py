@@ -1,3 +1,5 @@
+import sys
+
 providers = {
     "cloudflare": {
         'host': 'cloudflare-dns.com',
@@ -12,3 +14,5 @@ providers = {
         'ipv6': ['2001:4860:4860::8844', '2001:4860:4860::8888'],
     },
 }
+
+debug = sys.flags.debug

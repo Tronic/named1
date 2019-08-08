@@ -54,10 +54,10 @@ source code as needed.
 ## Development
 
 For more detailed output (incl. any successful lookups and which provider was
-fastest), use Python developer mode:
+fastest), use Python debug mode:
 
 ````
-python3 -X dev -m named1
+python3 -d -m named1
 ````
 
 This program is based on Python ````trio```` async I/O framework. If you plan to

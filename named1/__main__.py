@@ -1,8 +1,6 @@
-import sys
-
 import trio
 
-from named1 import providers
+from named1 import debug, providers
 from named1.dnserror import WontResolve
 from named1.nameclient import NameClient
 from named1.rediscache import Cacher
@@ -24,11 +22,12 @@ async def resolve_task(sender, query):
                 sender.send_nowait(await query)
         except trio.BrokenResourceError: pass  # We are late, no-one's listening
         except WontResolve as e:
-            if sys.flags.dev_mode: print(e)
+            if debug: print(e)
         except RuntimeError as e:
             print(f"{query.__qualname__} {e!r}")
 
 async def main():
+    print("Debug mode enabled" if debug else "Named1 starting in normal mode. (python -d for debug)")
     nclients = [NameClient(name, servers) for name, servers in providers.items()]
     async def resolve(**dnsquery):
         nonlocal nursery, cacher
@@ -62,7 +61,7 @@ async def main():
             await nursery.start(serve53, ("::", 53), resolve)
             for nclient in nclients: nursery.start_soon(nclient.execute)
     except KeyboardInterrupt:
-        if sys.flags.dev_mode: raise  # Traceback plz!
+        if debug: raise  # Traceback plz!
     finally:
         print("Exiting")
 
