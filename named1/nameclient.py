@@ -143,12 +143,15 @@ class NameClient:
         async with trio.open_nursery() as nursery:
             while True:
                 while len(self.connections) < 2:
+                    await trio.sleep(0.1 * random.random())  # Avoid connecting everything at the same moment
                     connection = NameConnection(self.name, next(ip), self.servers['host'], self.servers['path'])
                     try:
                         await nursery.start(connection.execute, self.connections)
-                    except OSError:  # TCP connect() failed
-                        await trio.sleep(random.random())
-                await trio.sleep(1)
+                    except OSError:  # TCP connect() failed (most likely network down)
+                        await trio.sleep(1)
+                    except trio.BrokenResourceError:  # Disconnected
+                        pass
+                await trio.sleep(3) # Limit load & allow other async code to run
 
     async def resolve(self, name, type="A", **kwargs):
         if type in (255, "*", "ANY") and self.name == "cloudflare":

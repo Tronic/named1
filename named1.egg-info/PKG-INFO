@@ -1,12 +1,31 @@
 Metadata-Version: 2.1
 Name: named1
-Version: 0.0.2
+Version: 0.0.3
 Summary: DNS server with DNS-over-HTTPS and Redis caching
 Home-page: https://github.com/Tronic/named1
 Author: L. Kärkkäinen
 Author-email: tronic@noreply.users.github.com
 License: UNKNOWN
-Description: UNKNOWN
+Description: # Named1 DNS server
+        
+        A very experimental DNS server with Redis caching.
+        
+        Linux:
+        
+        ````
+        pip3 install git+https://github.com/Tronic/named1.git
+        sudo apt install redis
+        sudo python3 -m named1
+        ````
+        
+        MacOS
+        
+        ````
+        pip3 install git+https://github.com/Tronic/named1.git
+        brew install redis
+        python3 -m named1
+        ````
+        
 Platform: UNKNOWN
 Classifier: Programming Language :: Python :: 3
 Classifier: License :: OSI Approved :: MIT License

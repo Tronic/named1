@@ -2,7 +2,7 @@ import setuptools
 
 setuptools.setup(
     name="named1",
-    version="0.0.2",
+    version="0.0.3",
     author="L. Kärkkäinen",
     author_email="tronic@noreply.users.github.com",
     description="DNS server with DNS-over-HTTPS and Redis caching",
