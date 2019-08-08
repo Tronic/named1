@@ -2,7 +2,7 @@ import setuptools
 
 setuptools.setup(
     name="named1",
-    version="0.0.5",
+    version="0.0.6",
     author="L. Kärkkäinen",
     author_email="tronic@noreply.users.github.com",
     description="DNS server with DNS-over-HTTPS and Redis caching",
@@ -17,12 +17,8 @@ setuptools.setup(
     ],
     install_requires = [
         "trio>=0.12",
-        "trio-redis",
         "h2",
         "dnspython",
-    ],
-    dependency_links = [
-        "https://github.com/Tronic/trio-redis/tarball/master#egg=trio-redis",
     ],
     include_package_data = True,
 )

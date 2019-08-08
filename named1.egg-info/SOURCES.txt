@@ -11,3 +11,8 @@ named1.egg-info/SOURCES.txt
 named1.egg-info/dependency_links.txt
 named1.egg-info/requires.txt
 named1.egg-info/top_level.txt
+trio_redis/__init__.py
+trio_redis/client.py
+trio_redis/connection.py
+trio_redis/errors.py
+trio_redis/serialization.py

@@ -1,6 +1,6 @@
 Metadata-Version: 2.1
 Name: named1
-Version: 0.0.5
+Version: 0.0.6
 Summary: DNS server with DNS-over-HTTPS and Redis caching
 Home-page: https://github.com/Tronic/named1
 Author: L. Kärkkäinen
@@ -20,7 +20,7 @@ Description: # Named1 DNS server
         answers that arrive get cached (if Redis database is installed) so that the
         next time upstream DNS don't even need to be queried.
         
-        "Happy eyes" style fallback is used within each provider, so that if one of the
+        "Happy eyeballs" style fallback is used within each provider, so that if one of the
         servers doesn't respond quickly enough, the other one gets queried as well.
         Again, the fastest response wins.
         
