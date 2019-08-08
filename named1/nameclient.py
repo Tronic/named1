@@ -147,7 +147,7 @@ class NameClient:
             connection = NameConnection(self.name, next(ip), self.servers['host'], self.servers['path'])
             try:
                 await connection.execute(self.connections, task_status=task_status)
-            except (OSError, trio.BrokenResourceError): pass
+            except (OSError, trio.BrokenResourceError, RuntimeError): pass  # TODO: Better handling of various disconnections
             if connection.successes == 0:
                 # Scatter reconnection times after disconnection
                 await trio.sleep(1 + random.random())
