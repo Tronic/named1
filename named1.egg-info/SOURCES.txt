@@ -6,6 +6,7 @@ named1/dnserror.py
 named1/nameclient.py
 named1/rediscache.py
 named1/serve53.py
+named1/testi.py
 named1.egg-info/PKG-INFO
 named1.egg-info/SOURCES.txt
 named1.egg-info/dependency_links.txt
