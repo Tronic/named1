@@ -63,6 +63,5 @@ class Cacher:
             'Status': 0, 'TC': False, 'RD': True, 'RA': True, 'AD': False, 'CD': False,
             "Question": [dict(name=name, type=type)],
             "Answer": answer,
-            'Comment': 'Response from Named1 cache.',
             'NameClient': 'RedisCache',
         }
