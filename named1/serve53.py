@@ -41,7 +41,7 @@ async def serve53(addr, resolve, task_status=trio.TASK_STATUS_IGNORED):
             print(f"[Serve53] listening on {addr}")
         except OSError as e:
             if e.errno == 13: reason = "permission denied (run with sudo?)"
-            elif e.errno == 48: reason = "already in use (is another DNS server running?)"
+            elif e.errno in (48, 49): reason = "already in use (is another DNS server running?)"
             else: reason = str(e)
             print(f"[Serve53] {addr} {reason}")
             return
