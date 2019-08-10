@@ -30,8 +30,10 @@ class Cacher:
             answer = [[t, expire, data] for (t, data), expire in merger.items() if expire > now]
             if answer:
                 r['Answer'] = answer
+                # Cache up to longest TTL, max 1 day
+                expiry = min(now + 86400, max(merger.values()))
                 await self.redis.set(key, json.dumps(r))
-                await self.redis.expireat(key, max(merger.values()))
+                await self.redis.expireat(key, expiry)
             elif old:
                 await self.redis.delete(key)
 
