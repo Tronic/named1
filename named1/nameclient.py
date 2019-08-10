@@ -167,8 +167,6 @@ class NameClient:
         at short intervals if other servers are available, without interrupting
         prior requests. The first reply is returned and then all remaining
         requests are terminated. Total timeout 0.9 seconds."""
-        if type in (255, "*", "ANY") and self.name == "cloudflare":
-            raise WontResolve(f"[{self.name}] {name} Cloudflare won't answer */ANY requests")
         tried_connections = set()
         sender, receiver = trio.open_memory_channel(1000)
         request_exceptions = []
@@ -176,7 +174,7 @@ class NameClient:
             try: sender.send_nowait(await resolver)
             except RuntimeError as e: request_exceptions.append(e)
         async with trio.open_nursery() as nursery, receiver:
-            for delay in (0.1, 0.2, 0.3, 0.3):  # Retry until deadline
+            for delay in (0.2, 1, 2, 4):  # Retry until deadline
                 connections = self.connections - tried_connections
                 if connections:
                     connection = random.choice(list(connections))

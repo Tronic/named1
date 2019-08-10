@@ -1,8 +1,9 @@
 import setuptools
+from named1 import __version__
 
 setuptools.setup(
     name="named1",
-    version="0.0.7",
+    version=__version__,
     author="L. Kärkkäinen",
     author_email="tronic@noreply.users.github.com",
     description="DNS server with DNS-over-HTTPS and Redis caching",
