@@ -31,7 +31,7 @@ async def main():
     nclients = [NameClient(name, servers) for name, servers in providers.items()]
     async def resolve(**dnsquery):
         nonlocal nursery, cacher
-        if cacher:
+        if cacher and dnsquery['type'] != 255:
             with trio.move_on_after(0.01):
                 try: return await cacher.resolve(**dnsquery)
                 except WontResolve: pass
