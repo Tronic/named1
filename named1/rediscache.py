@@ -28,12 +28,12 @@ class Cacher:
                 if n == name and merger.get((t, data), 0) < expire:
                     merger[(t, data)] = expire
             answer = [[t, expire, data] for (t, data), expire in merger.items() if expire > now]
-            if not answer and old:
-                await self.redis.delete(key)
-            else:
+            if answer:
                 r['Answer'] = answer
                 await self.redis.set(key, json.dumps(r))
                 await self.redis.expireat(key, max(merger.values()))
+            elif old:
+                await self.redis.delete(key)
 
     async def resolve_answer(self, name, type, recurse_cnames=True):
         key = f"dns:{name}"
