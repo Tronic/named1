@@ -56,7 +56,7 @@ class NameConnection:
                     async with trio.open_nursery() as nursery:
                         task_status.started()
                         nursery.start_soon(self.send_task)
-                        await self.recv_task()
+                        nursery.start_soon(self.recv_task)
                 finally:
                     with trio.move_on_after(1) as cleanup:
                         cleanup.shield = True
@@ -95,7 +95,7 @@ class NameConnection:
         if self.exited.is_set(): raise RuntimeError("NameConnection no longer executing")
         while len(self.streams) > 3:
             await trio.sleep(0.01)
-        self.connection.deadline = min(self.connection.deadline, trio.move_on_after(2).deadline)
+        self.connection.deadline = min(self.connection.deadline, trio.current_time() + 2)
         self.attempted += 1
         num = self.conn.get_next_available_stream_id()
         sender, receiver = trio.open_memory_channel(0)
