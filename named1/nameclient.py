@@ -105,7 +105,8 @@ class NameConnection:
                 (":authority", self.host),
                 (":method", "GET"),
                 (":path", f"{self.path}?{'&'.join(f'{k}={quote(str(v))}' for k, v in req.items())}"),
-                ('accept', 'application/dns-json')
+                ('accept', 'application/dns-json'),
+                ('user-agent', 'Python Trio H2 Named1 (+https://github.com/Tronic/named1)'),
             ), end_stream=True)
             self.streams[num] = sender
             await self.send_some.send(True)

@@ -1,8 +1,10 @@
 import trio
-from dns import edns, message, rrset, flags, rcode
+from dns import edns, message, name, rrset, flags, rcode
 from trio.socket import socket, AF_INET, AF_INET6, SO_REUSEPORT, SOCK_DGRAM, SOL_SOCKET
 
 from named1 import debug
+
+origin = name.Name([b""])
 
 async def _process(sock, resolve, data, addr):
     try:
@@ -24,7 +26,7 @@ async def _process(sock, resolve, data, addr):
                 data = [a['data']] if 'data' in a else []
                 m.append(rrset.from_text(a['name'], a.get('TTL'), "IN", a['type'], *data))
                 if debug:
-                    print(f"\033[32m[{res['NameClient']}] {str(m[-1])[:73]:73s}", end="\r\033[0m", flush=True)
+                    print(f"\0337\033[1;1H\033[32m[{res['NameClient']}] {str(m[-1])[:73]:73s}\033[K\0338\033[0m", end="", flush=True)
         if want_nsid:
             comment = res.get("Comment")
             nsid = f"named1/{res['NameClient']}{': ' + comment if comment else ''}"
@@ -32,7 +34,11 @@ async def _process(sock, resolve, data, addr):
     except trio.TooSlowError: # Don't die on timeout but report back a failure
         msg.flags = flags.QR
         msg.set_rcode(rcode.SERVFAIL)
-    await sock.sendto(msg.to_wire(), addr)
+    try:
+        await sock.sendto(msg.to_wire(origin=origin), addr)
+    except Exception as e:
+        raise Exception(f"Malformed output with answer:\n{res}\n\nand msg:\n{msg}") from e
+
 
 
 async def serve53(addr, resolve, task_status=trio.TASK_STATUS_IGNORED):

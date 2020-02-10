@@ -20,6 +20,7 @@ setuptools.setup(
         "trio>=0.12",
         "h2",
         "dnspython",
+        "redio",
     ],
     include_package_data = True,
 )

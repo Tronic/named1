@@ -1,6 +1,6 @@
 Metadata-Version: 2.1
 Name: named1
-Version: 0.0.8
+Version: 0.1.0
 Summary: DNS server with DNS-over-HTTPS and Redis caching
 Home-page: https://github.com/Tronic/named1
 Author: L. Kärkkäinen
