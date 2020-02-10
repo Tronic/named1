@@ -33,7 +33,7 @@ async def _process(sock, resolve, data, addr):
     except Exception as e: # Don't die on errors/timeouts but report back a failure
         msg.flags = flags.QR
         msg.set_rcode(rcode.SERVFAIL)
-        print("{e}\n{msg}\n")
+        print(f"{msg}\n{e}")
     try:
         await sock.sendto(msg.to_wire(origin=origin), addr)
     except Exception as e:

@@ -20,18 +20,23 @@ async def cacher_task(receiver):
 async def resolve_task(sender, resolver, dnsquery, done, success):
     async with sender:
         stats_queries[resolver.name] += 1
+        start_time = trio.current_time()
         try:
             # This can be longer running than interactive requests
             with trio.move_on_after(5):
                 sender.send_nowait(await resolver.resolve(**dnsquery))
                 success()
-                return
+                stats_count[resolver.name] += 1
+                duration = min(1.0, trio.current_time() - start_time)
+                stats_time[resolver.name] = 0.9 * (stats_time[resolver.name] or duration) + 0.1 * duration
+            return
         except trio.BrokenResourceError:  # We are late, receiver is dead
             pass
         except WontResolve:  # Resolver can't handle it
             return
         finally:
             done.set()  # Signal that we are no longer working
+    stats_time[resolver.name] = 0.0
     stats_timeouts[resolver.name] += 1
 
 
@@ -41,11 +46,13 @@ async def resolve_happy(resolvers, dnsquery, nursery, sender):
         for r in resolvers:
             done = trio.Event()
             nursery.start_soon(resolve_task, sender.clone(), r, dnsquery, done, success)
-            with trio.move_on_after(0.01 if r.name == "RedisCache" else 0.1):
+            with trio.move_on_after(0.005 if r.name == "RedisCache" else 0.1):
                 await done.wait()
 
 stat_res = None
 stats_requests = 0
+stats_names = []
+stats_fastest = defaultdict(int)
 stats_count = defaultdict(int)
 stats_time = defaultdict(float)
 stats_queries = defaultdict(int)
@@ -56,9 +63,10 @@ async def stats_task():
     spin = 0
     while True:
         spin = (spin + 1) % len(spinner)
-        requests = sum(stats_count.values())
+        queries = sum(stats_queries.values())
+        resolved = sum(stats_count.values())
         ret = f"\0337\033[1;1H\033[1m{spinner[spin]}  "
-        ret +=f"Resolved: {requests}/{stats_requests}  "
+        ret +=f"Resolved: {resolved}/{stats_requests}  "
         if stat_res:
             client = stat_res.get("NameClient", "⋯")
             try:
@@ -66,23 +74,23 @@ async def stats_task():
             except:
                 req = str(stat_res["name"])
             ret +=f"\033[32m[{client}] {req[:50]}\033[K"
-        ret += "\033[0m\n\nProvider          Wins    Avg.  Queries Timeouts"
-        for k in sorted(stats_queries.keys()):
+        ret += "\033[0m\n\nProvider       Resolved    Fastest / %   Avg.  Queries Timeouts"
+        for k in stats_names:
             c = stats_count[k]
-            t = stats_time[k] / c if c else 0
-            ret += f"\n\033[0;32m{k:15}  \033[1m{c / requests:5.0%}  {1000 * t:4.0f}ms {stats_queries[k]:8d} {stats_timeouts[k]:8d}\033[K"
+            t = f"{1000 * stats_time[k]:4.0f}ms" if stats_time[k] else "   -  "
+            p = f"{stats_fastest[k] / queries:5.0%}" if queries else "   - "
+            ret += f"\n\033[0;32m{k:15}  \033[1m{c:6d}   {stats_fastest[k]:6d} {p} {t} {stats_queries[k]:8d} {stats_timeouts[k]:8d}\033[K"
         print(ret, end="\033[K\033[0m\0338", flush=True)
         await trio.sleep(0.1)
 
 async def main():
     async def resolve(**dnsquery):
-        global stats_requests, stat_res
+        global stats_requests, stats_names, stat_res
         nonlocal nursery
-        start_time = trio.current_time()
         stats_requests += 1
         stat_res = dnsquery
-        random.shuffle(nclients)
-        resolvers = [rediscache, *nclients]
+        resolvers = [rediscache, *sorted(nclients, key=lambda nc: stats_time[nc.name] or 1)]
+        stats_names = [r.name for r in resolvers]
         # RedisCache and Cloudflare cannot answer type ANY requests
         type_any = dnsquery['type'] == 255
         if type_any:
@@ -101,8 +109,7 @@ async def main():
         if fastest:
             statkey = fastest["NameClient"]
             stat_res = fastest
-            stats_count[statkey] += 1
-            stats_time[statkey] += trio.current_time() - start_time
+            stats_fastest[statkey] += 1
             return fastest
         raise trio.TooSlowError
 
