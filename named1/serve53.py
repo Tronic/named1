@@ -1,6 +1,7 @@
 import trio
 from dns import edns, message, name, rrset, flags, rcode
 from trio.socket import socket, AF_INET, AF_INET6, SO_REUSEPORT, SOCK_DGRAM, SOL_SOCKET
+from traceback import print_exception
 
 from named1 import debug
 
@@ -25,15 +26,14 @@ async def _process(sock, resolve, data, addr):
             for a in res.get(n, []):
                 data = [a['data']] if 'data' in a else []
                 m.append(rrset.from_text(a['name'], a.get('TTL'), "IN", a['type'], *data))
-                if debug:
-                    print(f"\0337\033[1;1H\033[32m[{res['NameClient']}] {str(m[-1])[:73]:73s}\033[K\0338\033[0m", end="", flush=True)
         if want_nsid:
             comment = res.get("Comment")
             nsid = f"named1/{res['NameClient']}{': ' + comment if comment else ''}"
             msg.options.append(edns.GenericOption(edns.NSID, nsid.encode()))
-    except trio.TooSlowError: # Don't die on timeout but report back a failure
+    except Exception as e: # Don't die on errors/timeouts but report back a failure
         msg.flags = flags.QR
         msg.set_rcode(rcode.SERVFAIL)
+        print("{e}\n{msg}\n")
     try:
         await sock.sendto(msg.to_wire(origin=origin), addr)
     except Exception as e:

@@ -17,21 +17,38 @@ async def cacher_task(receiver):
         return
     print("RedisCacher timed out!")
 
-async def resolve_task(sender, name, query, start_delay):
+async def resolve_task(sender, resolver, dnsquery, done, success):
     async with sender:
-        if start_delay:
-            await trio.sleep(start_delay)
+        stats_queries[resolver.name] += 1
         try:
             # This can be longer running than interactive requests
             with trio.move_on_after(5):
-                sender.send_nowait(await query)
+                sender.send_nowait(await resolver.resolve(**dnsquery))
+                success()
                 return
-        except trio.BrokenResourceError: pass  # We are late, no-one's listening
-        except WontResolve: return  # Resolver can't handle it
-    stats_timeouts[name] += 1
+        except trio.BrokenResourceError:  # We are late, receiver is dead
+            pass
+        except WontResolve:  # Resolver can't handle it
+            return
+        finally:
+            done.set()  # Signal that we are no longer working
+    stats_timeouts[resolver.name] += 1
 
+
+async def resolve_happy(resolvers, dnsquery, nursery, sender):
+    async with sender, trio.open_nursery() as happy_eyeballs:
+        success = happy_eyeballs.cancel_scope.cancel
+        for r in resolvers:
+            done = trio.Event()
+            nursery.start_soon(resolve_task, sender.clone(), r, dnsquery, done, success)
+            with trio.move_on_after(0.01 if r.name == "RedisCache" else 0.1):
+                await done.wait()
+
+stat_res = None
+stats_requests = 0
 stats_count = defaultdict(int)
 stats_time = defaultdict(float)
+stats_queries = defaultdict(int)
 stats_timeouts = defaultdict(int)
 
 async def stats_task():
@@ -40,39 +57,40 @@ async def stats_task():
     while True:
         spin = (spin + 1) % len(spinner)
         requests = sum(stats_count.values())
-        ret = f"\0337\033[2;1H\033[1m{spinner[spin]}  "
-        if requests > 0:
-            ret +=f"Requests: {requests}  "
-            for k in sorted(stats_count.keys()):
-                c = stats_count[k]
-                t = stats_time[k] / c
-                ret += f"   {c / requests:.0%}/{1000 * t:.0f}ms {k}"
-                if stats_timeouts[k]:
-                    ret += f" ({stats_timeouts[k]} timeouts)"
-        else:
-            ret += "No requests served"
+        ret = f"\0337\033[1;1H\033[1m{spinner[spin]}  "
+        ret +=f"Resolved: {requests}/{stats_requests}  "
+        if stat_res:
+            client = stat_res.get("NameClient", "⋯")
+            try:
+                req = str(stat_res["Question"][0]["name"])
+            except:
+                req = str(stat_res["name"])
+            ret +=f"\033[32m[{client}] {req[:50]}\033[K"
+        ret += "\033[0m\n\nProvider          Wins    Avg.  Queries Timeouts"
+        for k in sorted(stats_queries.keys()):
+            c = stats_count[k]
+            t = stats_time[k] / c if c else 0
+            ret += f"\n\033[0;32m{k:15}  \033[1m{c / requests:5.0%}  {1000 * t:4.0f}ms {stats_queries[k]:8d} {stats_timeouts[k]:8d}\033[K"
         print(ret, end="\033[K\033[0m\0338", flush=True)
         await trio.sleep(0.1)
 
 async def main():
     async def resolve(**dnsquery):
-        global stats_cachemiss
+        global stats_requests, stat_res
         nonlocal nursery
         start_time = trio.current_time()
+        stats_requests += 1
+        stat_res = dnsquery
+        random.shuffle(nclients)
+        resolvers = [rediscache, *nclients]
+        # RedisCache and Cloudflare cannot answer type ANY requests
         type_any = dnsquery['type'] == 255
+        if type_any:
+            resolvers = [r for r in resolvers if r.name not in ("RedisCache", "cloudflare")]
         sender, receiver = trio.open_memory_channel(len(nclients))
         async with sender, receiver:
-            random.shuffle(nclients)
-            resolvers = [rediscache, *nclients]
-            # RedisCache and Cloudflare cannot answer ANY requests
-            if type_any:
-                resolvers = [r for r in resolvers if r.name not in ("RedisCache", "cloudflare")]
-            # Start a resolving task on each suitable provider
-            delay = 0.0
-            for r in resolvers:
-                if type_any and nclient.name == "cloudflare": continue  # Cloudflare won't answer type ANY
-                nursery.start_soon(resolve_task, sender.clone(), r.name, r.resolve(**dnsquery), delay)
-                delay += 0.01
+            # Staggered startups of resolving tasks on each suitable provider
+            nursery.start_soon(resolve_happy, resolvers, dnsquery, nursery, sender.clone())
             fastest = None
             # Timeout for answering downstream requests
             with trio.move_on_after(5 if type_any else 0.95):
@@ -80,15 +98,17 @@ async def main():
                 sender.send_nowait(fastest)  # Put the fastest back for cacher
             # Cache any received answers
             nursery.start_soon(cacher_task, receiver.clone())
-            statkey = fastest["NameClient"] if fastest else "Timeout"
+        if fastest:
+            statkey = fastest["NameClient"]
+            stat_res = fastest
             stats_count[statkey] += 1
             stats_time[statkey] += trio.current_time() - start_time
-            if fastest: return fastest
-            raise trio.TooSlowError
+            return fastest
+        raise trio.TooSlowError
 
     # Main program runs servers and client connections
     if debug:
-        print("\033[?1049h\033[3r\033[3H", end="")
+        print("\033[?1049h\033[10r\033[10H", end="")
         print(f"Named1 {__version__} debug mode enabled")
     else:
         print(f"Named1 {__version__} starting in normal mode (python -d for debug)")
