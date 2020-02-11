@@ -7,14 +7,15 @@ from redio import Redis
 from named1.dnserror import WontResolve
 
 name = "RedisCache"
+redis = Redis()
 
 async def cache(qr):
     name = qr['Question'][0]['name']
     key = f"dns:{name}"
     if not qr.get('Answer'): return
     now = int(datetime.now().timestamp())
-    redis = Redis()
-    old = await redis.get(key).fulldecode
+    db = redis()
+    old = await db.get(key).fulldecode
     r = old if isinstance(old, dict) else dict(Answer=[])
     merger = {(t, data): expire for t, expire, data in r['Answer']}
     for a in qr['Answer']:
@@ -26,14 +27,14 @@ async def cache(qr):
         r['Answer'] = answer
         # Cache up to longest TTL, max 1 day
         expiry = min(now + 86400, max(merger.values()))
-        await redis.set(key, json.dumps(r)).expireat(key, expiry)
+        await db.set(key, json.dumps(r)).expireat(key, expiry)
     elif old:
-        await redis.delete(key)
+        await db.delete(key)
 
 async def resolve_answer(name, type, recurse_cnames=True):
     key = f"dns:{name}"
     now = int(datetime.now().timestamp())
-    cached = await Redis().get(key).fulldecode
+    cached = await redis().get(key).fulldecode
     if not cached: raise WontResolve(f"[RedisCache] {name} not found")
     try:
         answer = [
