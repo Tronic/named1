@@ -169,7 +169,7 @@ class NameClient:
         prior requests. The first reply is returned and then all remaining
         requests are terminated. Total timeout 0.9 seconds."""
         tried_connections = set()
-        sender, receiver = trio.open_memory_channel(1000)
+        sender, receiver = trio.open_memory_channel(50)
         request_exceptions = []
         async def resolve_task(resolver):
             try: sender.send_nowait(await resolver)

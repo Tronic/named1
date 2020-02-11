@@ -31,9 +31,10 @@ async def _process(sock, resolve, data, addr):
             nsid = f"named1/{res['NameClient']}{': ' + comment if comment else ''}"
             msg.options.append(edns.GenericOption(edns.NSID, nsid.encode()))
     except Exception as e: # Don't die on errors/timeouts but report back a failure
+        if not isinstance(e, trio.TooSlowError):
+            print(f"{e!r}\n{msg}")
         msg.flags = flags.QR
         msg.set_rcode(rcode.SERVFAIL)
-        print(f"{msg}\n{e}")
     try:
         await sock.sendto(msg.to_wire(origin=origin), addr)
     except Exception as e:

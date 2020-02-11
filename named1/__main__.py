@@ -64,7 +64,7 @@ async def stats_task():
     while True:
         spin = (spin + 1) % len(spinner)
         queries = sum(stats_queries.values())
-        resolved = sum(stats_count.values())
+        resolved = sum(stats_fastest.values())
         ret = f"\0337\033[1;1H\033[1m{spinner[spin]}  "
         ret +=f"Resolved: {resolved}/{stats_requests}  "
         if stat_res:
