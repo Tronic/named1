@@ -15,7 +15,7 @@ async def cache(qr):
     if not qr.get('Answer'): return
     now = int(datetime.now().timestamp())
     db = redis()
-    old = await db.get(key).fulldecode
+    old = await db.get(key).strdecode
     r = old if isinstance(old, dict) else dict(Answer=[])
     merger = {(t, data): expire for t, expire, data in r['Answer']}
     for a in qr['Answer']:
@@ -34,7 +34,7 @@ async def cache(qr):
 async def resolve_answer(name, type, recurse_cnames=True):
     key = f"dns:{name}"
     now = int(datetime.now().timestamp())
-    cached = await redis().get(key).fulldecode
+    cached = await redis().get(key).strdecode
     if not cached: raise WontResolve(f"[RedisCache] {name} not found")
     try:
         answer = [
