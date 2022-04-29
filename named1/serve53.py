@@ -25,7 +25,7 @@ async def _process(sock, resolve, data, addr):
         for m, n in ((msg.question, "Question"), (msg.answer, "Answer"), (msg.authority, "Authority"), (msg.additional, "Additional")):
             for a in res.get(n, []):
                 data = [a['data']] if 'data' in a else []
-                m.append(rrset.from_text(a['name'], a.get('TTL'), "IN", a['type'], *data))
+                m.append(rrset.from_text(a['name'], a.get('TTL', 0), "IN", a['type'], *data))
         if want_nsid:
             comment = res.get("Comment")
             nsid = f"named1/{res['NameClient']}{': ' + comment if comment else ''}"
