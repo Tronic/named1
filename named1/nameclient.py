@@ -203,10 +203,8 @@ class NameClient:
             )
             try:
                 await connection.execute(self.connections, task_status=task_status)
-            except Exception as e:
-                print(repr(e))
-                task_status.started()
-                pass  # TODO: Better handling of various disconnections
+            except Exception:
+                pass  # Ignore errors, we will reconnect
             if connection.successes == 0:
                 # Scatter reconnection times after disconnection
                 await trio.sleep(1 + random.random())
@@ -217,8 +215,11 @@ class NameClient:
             while True:
                 with trio.CancelScope() as cancel_scope:
                     while len(self.connections) < 2:
-                        # Returns once NameConnection has added itself to self.connections, or connection fails
-                        await nursery.start(run_connection)
+                        try:
+                            # Returns once NameConnection has added itself to self.connections, or connection fails
+                            await nursery.start(run_connection)
+                        except RuntimeError:
+                            pass
                     await trio.sleep_forever()
 
     async def resolve(self, name, type="A", **kwargs):
@@ -233,7 +234,7 @@ class NameClient:
         async def resolve_task(resolver):
             try:
                 sender.send_nowait(await resolver)
-            except RuntimeError as e:
+            except (RuntimeError, trio.BrokenResourceError) as e:
                 request_exceptions.append(e)
 
         async with trio.open_nursery() as nursery, receiver:
