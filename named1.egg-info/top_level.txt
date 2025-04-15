@@ -1,2 +1,0 @@
-named1
-trio_redis

@@ -203,7 +203,7 @@ class NameClient:
             )
             try:
                 await connection.execute(self.connections, task_status=task_status)
-            except (OSError, trio.BrokenResourceError, RuntimeError) as e:
+            except Exception as e:
                 print(repr(e))
                 task_status.started()
                 pass  # TODO: Better handling of various disconnections

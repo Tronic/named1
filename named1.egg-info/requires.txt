@@ -1,4 +1,0 @@
-trio>=0.12
-h2
-dnspython
-redio
