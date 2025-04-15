@@ -8,10 +8,16 @@ from urllib.parse import quote
 
 import h2.connection
 import trio
-import trio.socket as socket
-from h2.events import ResponseReceived, DataReceived, StreamEnded, StreamReset, ConnectionTerminated
+from h2.events import (
+    ConnectionTerminated,
+    DataReceived,
+    ResponseReceived,
+    StreamEnded,
+    StreamReset,
+)
 
 from named1.dnserror import WontResolve
+
 
 class NameConnection:
     def __init__(self, name, ip, host, path):
@@ -40,14 +46,25 @@ class NameConnection:
             t = time.monotonic()
             print(f"[{self.name}] Trying {self.ip}", end="\033[K\r", flush=True)
             async with await trio.open_tcp_stream(self.ip, 443) as sock:
-                sock = trio.SSLStream(sock, server_hostname=self.host, https_compatible=True, ssl_context=self.ssl)
+                sock = trio.SSLStream(
+                    sock,
+                    server_hostname=self.host,
+                    https_compatible=True,
+                    ssl_context=self.ssl,
+                )
                 await sock.do_handshake()
-                cert = sock.getpeercert().get('subject')
-                cert = cert and {k: v for t in cert for k, v in t}.get('commonName') or 'not validated'
+                cert = sock.getpeercert().get("subject")
+                cert = (
+                    cert
+                    and {k: v for t in cert for k, v in t}.get("commonName")
+                    or "not validated"
+                )
                 self.sock = sock
-                self.conn = h2.connection.H2Connection(config=h2.config.H2Configuration(
-                    client_side=True, header_encoding="UTF-8"
-                ))
+                self.conn = h2.connection.H2Connection(
+                    config=h2.config.H2Configuration(
+                        client_side=True, header_encoding="UTF-8"
+                    )
+                )
                 self.conn.initiate_connection()
                 print(f"[{self.name}] {self.ip} connected, cert {cert}")
                 self.reason = None
@@ -64,10 +81,21 @@ class NameConnection:
                         self.exited.set()
                         self.duration = time.monotonic() - t
                         if self.reason is None:
-                            self.reason = "we canceled" if self.connection.cancel_called else "disconnected"
-                        requests = f"answered {self.successes}/{self.attempted}" if self.attempted else "no requests done"
-                        print(f"[{self.name}] {self.ip} {self.reason} after {self.duration:.2f} s, {requests}")
-                        for stream in list(self.streams.values()): await stream.aclose()
+                            self.reason = (
+                                "we canceled"
+                                if self.connection.cancel_called
+                                else "disconnected"
+                            )
+                        requests = (
+                            f"answered {self.successes}/{self.attempted}"
+                            if self.attempted
+                            else "no requests done"
+                        )
+                        print(
+                            f"[{self.name}] {self.ip} {self.reason} after {self.duration:.2f} s, {requests}"
+                        )
+                        for stream in list(self.streams.values()):
+                            await stream.aclose()
 
     async def send_task(self):
         async for _ in self.can_send:
@@ -81,8 +109,8 @@ class NameConnection:
                 self.reason = "socket died"
                 raise RuntimeError("Socket died")
             for event in self.conn.receive_data(data):
-                #print(event)
-                if hasattr(event, 'stream_id') and event.stream_id > 0:
+                # print(event)
+                if hasattr(event, "stream_id") and event.stream_id > 0:
                     try:
                         await self.streams[event.stream_id].send(event)
                     except (KeyError, trio.BrokenResourceError):
@@ -92,41 +120,64 @@ class NameConnection:
                     raise RuntimeError("Peer ended the connection")
 
     async def resolve(self, **req):
-        if self.exited.is_set(): raise RuntimeError("NameConnection no longer executing")
+        if self.exited.is_set():
+            raise RuntimeError("NameConnection no longer executing")
         while len(self.streams) > 3:
             await trio.sleep(0.01)
-        self.connection.deadline = min(self.connection.deadline, trio.current_time() + 2)
+        self.connection.deadline = min(
+            self.connection.deadline, trio.current_time() + 2
+        )
         self.attempted += 1
         num = self.conn.get_next_available_stream_id()
         sender, receiver = trio.open_memory_channel(0)
         async with receiver:
-            self.conn.send_headers(num, headers=(
-                (":scheme", "https"),
-                (":authority", self.host),
-                (":method", "GET"),
-                (":path", f"{self.path}?{'&'.join(f'{k}={quote(str(v))}' for k, v in req.items())}"),
-                ('accept', 'application/dns-json'),
-                ('user-agent', 'Python Trio H2 Named1 (+https://github.com/Tronic/named1)'),
-            ), end_stream=True)
+            self.conn.send_headers(
+                num,
+                headers=(
+                    (":scheme", "https"),
+                    (":authority", self.host),
+                    (":method", "GET"),
+                    (
+                        ":path",
+                        f"{self.path}?{'&'.join(f'{k}={quote(str(v))}' for k, v in req.items())}",
+                    ),
+                    ("accept", "application/dns-json"),
+                    (
+                        "user-agent",
+                        "Python Trio H2 Named1 (+https://github.com/Tronic/named1)",
+                    ),
+                ),
+                end_stream=True,
+            )
             self.streams[num] = sender
             await self.send_some.send(True)
-            headers, data, done = [], b'', False
+            headers, data, done = [], b"", False
             try:
                 async for event in receiver:
-                    if isinstance(event, Exception): raise event
-                    elif isinstance(event, ResponseReceived): headers += event.headers
-                    elif isinstance(event, DataReceived): data += event.data
-                    elif isinstance(event, StreamEnded): done = True; break
-                    elif isinstance(event, StreamReset): break
+                    if isinstance(event, Exception):
+                        raise event
+                    elif isinstance(event, ResponseReceived):
+                        headers += event.headers
+                    elif isinstance(event, DataReceived):
+                        data += event.data
+                    elif isinstance(event, StreamEnded):
+                        done = True
+                        break
+                    elif isinstance(event, StreamReset):
+                        break
             finally:
                 del self.streams[num]
-        if not done: raise RuntimeError(f"Stream {num} terminated prior to request completion")
+        if not done:
+            raise RuntimeError(f"Stream {num} terminated prior to request completion")
         headers = dict(headers)
-        status, ctype = headers.get(":status"), headers.get('content-type', '')
-        if status != "200": raise RuntimeError(f"HTTP {status}: {data}")
-        if not 'javascript' in ctype and not 'json' in ctype: raise RuntimeError("Non-JSON response")
+        status, ctype = headers.get(":status"), headers.get("content-type", "")
+        if status != "200":
+            raise RuntimeError(f"HTTP {status}: {data}")
+        if "javascript" not in ctype and "json" not in ctype:
+            raise RuntimeError("Non-JSON response")
         data = json.loads(data.decode("ASCII"))  # RFC 8427 1.1: ASCII only
-        if not isinstance(data, dict): raise RuntimeError("Incorrect JSON format received")
+        if not isinstance(data, dict):
+            raise RuntimeError("Incorrect JSON format received")
         data["NameClient"] = self.name
         if data:
             self.successes += 1
@@ -135,6 +186,7 @@ class NameConnection:
                 self.connection.deadline += 10 if self.streams else math.inf
         return data
 
+
 class NameClient:
     def __init__(self, name, servers):
         self.name = name
@@ -142,13 +194,19 @@ class NameClient:
         self.connections = set()
 
     async def execute(self):
-        ip = itertools.cycle(self.servers['ipv6'] + self.servers['ipv4'])
+        ip = itertools.cycle(self.servers["ipv6"] + self.servers["ipv4"])
+
         async def run_connection(task_status):
             nonlocal ip, cancel_scope
-            connection = NameConnection(self.name, next(ip), self.servers['host'], self.servers['path'])
+            connection = NameConnection(
+                self.name, next(ip), self.servers["host"], self.servers["path"]
+            )
             try:
                 await connection.execute(self.connections, task_status=task_status)
-            except (OSError, trio.BrokenResourceError, RuntimeError): pass  # TODO: Better handling of various disconnections
+            except (OSError, trio.BrokenResourceError, RuntimeError) as e:
+                print(repr(e))
+                task_status.started()
+                pass  # TODO: Better handling of various disconnections
             if connection.successes == 0:
                 # Scatter reconnection times after disconnection
                 await trio.sleep(1 + random.random())
@@ -171,21 +229,32 @@ class NameClient:
         tried_connections = set()
         sender, receiver = trio.open_memory_channel(50)
         request_exceptions = []
+
         async def resolve_task(resolver):
-            try: sender.send_nowait(await resolver)
-            except RuntimeError as e: request_exceptions.append(e)
+            try:
+                sender.send_nowait(await resolver)
+            except RuntimeError as e:
+                request_exceptions.append(e)
+
         async with trio.open_nursery() as nursery, receiver:
             for delay in (0.2, 1, 2, 4):  # Retry until deadline
                 connections = self.connections - tried_connections
                 if connections:
                     connection = random.choice(list(connections))
                     tried_connections.add(connection)
-                    nursery.start_soon(resolve_task, connection.resolve(name=name, type=type, **kwargs))
+                    nursery.start_soon(
+                        resolve_task, connection.resolve(name=name, type=type, **kwargs)
+                    )
                 with trio.move_on_after(delay):
                     return await receiver.receive()
-        reason = f"requests unanswered {len(tried_connections)}" if tried_connections else "waiting for connection"
+        reason = (
+            f"requests unanswered {len(tried_connections)}"
+            if tried_connections
+            else "waiting for connection"
+        )
         raise WontResolve(f"[{self.name}] {name} timeout {reason}", request_exceptions)
 
     def resolve_reverse(self, ip):
         from ipaddress import ip_address
+
         return self.resolve(ip_address(ip).reverse_pointer, "PTR")

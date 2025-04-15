@@ -1,0 +1,29 @@
+[project]
+name = "named1"
+version = "0.2.0"
+authors = [
+    { name = "L. Kärkkäinen", email = "tronic@noreply.users.github.com" }
+]
+description = "DNS server with DNS-over-HTTPS and Redis caching"
+readme = "README.md"
+requires-python = ">=3.8"
+license = "MIT"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent"
+]
+dependencies = [
+    "trio>=0.12",
+    "h2",
+    "dnspython",
+    "redis",
+]
+
+[project.urls]
+Homepage = "https://github.com/Tronic/named1"
+
+[tool.setuptools.packages.find]
+where = ["."]
+
+[project.scripts]
+named1 = "named1.__main__:main"

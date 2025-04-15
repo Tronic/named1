@@ -1,6 +1,6 @@
 # Named1 DNS server
 
-A very experimental DNS server with Redis caching.
+A very experimental DNS server with local RAM caching.
 
 Cloudflare and Google public DNS servers are used by DNS-over-HTTPS so that the
 requests are secure and pass through any firewalls as well as public WIFI login
@@ -23,40 +23,40 @@ Cached answers take about 1 ms. Typical remote lookups on fast networks are in
 30 ms ballpark. Due to asynchronous implementation over HTTP/2 streams, a large
 number of requests can be done concurrently without slowing down the others.
 
+## Run directly with UV
+
+```shell
+uvx --from git+https://github.com/Tronic/named1.git named1
+```
+
+Note: You may need to be root to listen on port 53 (DNS).
+
 ## Installation
 
-Linux:
-
-````
-pip3 install git+https://github.com/Tronic/named1.git
-sudo apt install redis
-sudo python3 -m named1
-````
-
-MacOS:
-
-````
-pip3 install git+https://github.com/Tronic/named1.git
-brew install redis
-python3 -m named1
-````
-
-Redis is optional. If it is not installed, Named1 works as a non-caching DNS
-server. Even then it should considerably speed up your name lookups.
+```python
+uv venv
+source .venv/bin/activate
+uv pip install git+https://github.com/Tronic/named1.git
+sudo named1
+```
 
 ## Configuration
 
-Not implemented. This will by default listen on IPv4 and IPv6 port 53 for
+Use `named1 -d` to enable debug mode, that displays the queries and statistics on which provider was the fastest to respond.
+
+This will by default listen on IPv4 and IPv6 port 53 for
 connections from anywhere. Redis is connected without password (keys of form
 dns:hostname.tld. are created). Google and Cloudflare are hardcoded. Edit the
 source code as needed.
+
+Earlier versions used Redis for caching, but since v0.2.0 RAM caching is done directly in Python. Cache is lost on named1 restarts.
 
 ## Test requests
 
 By using ````dig +nsid```` you will get a NSID response stating where the answer
 came from:
 
-````
+```
 $ dig slashdot.org +nsid -t ANY
 
 ; <<>> DiG 9.10.6 <<>> slashdot.org +nsid -t ANY
@@ -116,19 +116,12 @@ slashdot.org.		3574	IN	TXT	"google-site-verification=uNYSi1PcKvBrZjpA8ftcmExM2qp
 ;; SERVER: 127.0.0.1#53(127.0.0.1)
 ;; WHEN: Sat Aug 10 16:03:29 EEST 2019
 ;; MSG SIZE  rcvd: 495
-````
+```
 
 Notice how Named1 cached the answers of the ANY query and was able to answer
 the second query from RedisCache.
 
 ## Development
-
-For more detailed output (incl. any successful lookups and which provider was
-fastest), use Python debug mode:
-
-````
-python3 -d -m named1
-````
 
 This program is based on Python ````trio```` async I/O framework. If you plan to
 do any asynchronous programming on Python, do yourself a favour and stay far

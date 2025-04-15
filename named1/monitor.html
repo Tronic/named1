@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<title>Monitor</title>
+<style>
+html { font-size: 10px; }
+div { white-space: pre-wrap; word-wrap: break-word; }
+li { background: #0001; padding: 0.5em; box-shadow: 0 0 0.2em #0008 inset; margin: 0.2em; list-style: none; border-radius: 0.5em; }
+li.scheduled { background: blue; }
+li.running > div code { background: #ff06; }
+li.hung > div code { background: red; }
+ul { display: flex; justify-content: space-evenly; flex-wrap: wrap; padding: 0; margin: 0; }
+li.no-children { width: 50ch; }
+#traceback code:last-child { font-weight: bold; }
+</style>
+<h1>Trio Web Monitor</h1>
+<h2>Overview</h2>
+<p id=stats></p>
+<h2>Current execution</h2>
+<div id=traceback></div>
+<h2>Tasks and nurseries</h2>
+<ul id=tasks></ul>
+<script>
+const garbage = new Set()
+let info = null
+
+const ensure_element = (parent, tag, id) => {
+    let elem = document.getElementById(id)
+    if (elem) {
+        garbage.delete(elem)
+        elem.classList.remove("new")
+    } else {
+        elem = document.createElement(tag)
+        elem.id = id
+        elem.classList.add("new")
+        parent.appendChild(elem)
+    }
+    return elem
+}
+
+const do_task = (task, elem) => {
+    const li = ensure_element(elem, "li", `task-${task.id}`)
+    const div = ensure_element(li, "div", `task-${task.id}-status`)
+    div.innerHTML = `<b>${task.name}</b> <a href="vscode://file/${task.location}">${task.location}</a><div><code>${task.code}</code></div>`
+    if (task.times.runtime) li.className = undefined
+    else if (task.times.run) li.className = "running"
+    else if (task.times.scheduled) li.className = "scheduled"
+    else li.className = undefined
+    if (!task.times.runtime && info.current_time - task.times.run > 0.5) li.classList.add("hung")
+    if (task.child_tasks && task.child_tasks.length > 0) {
+        li.classList.remove("no-children")
+        const ul = ensure_element(li, "ul", `children-of-${task.id}`)
+        for (const t of task.child_tasks) do_task(t, ul)
+    } else {
+        li.classList.add("no-children")
+    }
+}
+
+async function update() {
+    info = await fetch("info.json").then(res => res.json())
+    const stats = document.getElementById("stats")
+    stats.textContent = info.current_statistics
+    const ul = document.getElementById("tasks")
+    for (const e of ul.querySelectorAll("li, ul")) garbage.add(e)
+    do_task(info.root_task, ul)
+    for (e of garbage) e.remove()
+    const traceback = document.getElementById("traceback")
+    html = "<p>"
+    for (const f of info.current_execution.stack) {
+        html += ` » <a href="vscode://file/${f.location}">${f.name}</a>`
+    }
+    html += "</p>"
+    for (const line of info.current_execution.code) {
+        html += `<code>${line}</code>`
+
+    }
+    traceback.innerHTML = html
+}
+
+setInterval(update, 30)
+
+</script>
